@@ -1,10 +1,12 @@
+#include <alloca.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 
-#define FT1_START 0x0200
-#define FT2_START 0x1400
+#define FT1_START    0x0200
+#define FT2_START    0x1400
+#define ROOTDIR_ADDR 0x2600
 typedef uint8_t   u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -170,78 +172,47 @@ int getFirstEmptyClusterIndex(){
 
 metaCluster getLastMegaCluster(){
         int emptyClusterIndex = getFirstEmptyClusterIndex(); 
-        //printf("%d\n", emptyClusterIndex);
         metaCluster lastMeta = getNormalizedMetaCluster(emptyClusterIndex/2);
-        //printf("%.3x ", lastMeta.nextCluster1);
-        //printf("%.3x\n", lastMeta.nextCluster2);
         return lastMeta;
 }
 
-u32 allocateFAT(){ // Um cluster será escrito em um metacluster
-        //puts("Allocating space in the file table");
+u16 allocateFAT(){
         int right = 0;
         unsigned char byte[3] = {};
+
+        // MODIFYING LAST CLUSTER
         metaCluster metaClus = getLastMegaCluster();
-        //printf("Last megacluster: %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
         if(metaClus.nextCluster1 == 0x000){
                 metaClus.nextCluster1 = 0xfff;
         }else{
                 metaClus.nextCluster2 = 0xfff;
                 right = 1;
         }
-        //printf("Replace by:       %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
 
         byte[0] = (metaClus.nextCluster1 & 0x0FF);
         byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
         byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
 
-        //printf("Represented by:  ");
-        //for(int i = 0; i < 3; i++){
-        //        printf("%02x ", byte[i]);
-        //}
-        //puts("");
-
+        // GETTING LAST CLUSTER ADDRESS
         int lastIndex = getFirstEmptyClusterIndex()/2;
-        int entryNumber = right+lastIndex*2;
-        //printf("Cluster index: %d\n", entryNumber);
-        //printf("Last Index: %d Mega Cluster\n", lastIndex);
+        u16 entryNumber = right+lastIndex*2;
         metaClus = getNormalizedMetaCluster(lastIndex);
-        //printf("%.3x ", metaClus.nextCluster1);
-        //printf("%.3x\n", metaClus.nextCluster2);
         int lastEntryAddress = FT1_START+(lastIndex*3);
         int lastEntryAddressCopy = FT2_START+(lastIndex*3);
-        //printf("Value at last:   ");
-        //for(int i = 0; i < 3; i++)
-        //        printf("%02x ", getByteFromAddress(DISK, lastEntryAddress+i));
-        //puts(""); 
-        //printf("From address:    (0x%x)\n", lastEntryAddress);
-
-        //unsigned char *cluster_ptr = malloc(512);
-        //fseek(DISK, lastEntryAddress, SEEK_SET);
-        //fseek(DISK, FT1_START, SEEK_SET);
-        //fread(cluster_ptr, sizeof(char), 512, DISK);
-        //u8 info = *(u8*)&cluster_ptr[0x00];
 
         // WRITING IN BOTH FILE TABLES
         fseek(DISK, lastEntryAddress, SEEK_SET);
         fwrite(byte, sizeof(char), 3, DISK);
         fseek(DISK, lastEntryAddressCopy, SEEK_SET);
         fwrite(byte, sizeof(char), 3, DISK);
-        //fseek(DISK, lastEntryAddress, SEEK_SET);
-        //fread(cluster_ptr, sizeof(char), 512, DISK);
-        //printf("New value:       ");
-        //for(int i = 0; i < 3; i++){
-        //        printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
-        //}
-        //puts("");
+
         u32 fileAddress = (33+entryNumber-2)*512;
-        //printf("Endereço alocado: 0x%x", fileAddress);
-        return fileAddress;
+        printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
+        return entryNumber;
 }
 
 void copyFileToFAT(char fileName[100]){
         FILE* SYSFILE;
-        //char* filename = "tofat";
         SYSFILE = fopen(fileName, "r");
         if(SYSFILE == NULL){
                 puts("ERRO: Arquivo nao encontrado");
@@ -253,8 +224,6 @@ void copyFileToFAT(char fileName[100]){
         fseek(SYSFILE, 0, SEEK_SET);
         char* buffer = malloc(512);
         fgets(buffer, 511, SYSFILE);
-        //printf("%s", buffer);
-
 
         u32 newFileAddress = allocateFAT();
         fseek(DISK, newFileAddress, SEEK_SET);
@@ -314,6 +283,68 @@ void printHumanReadableFileTable(){
 void readFileTable(){
         for(int i = 0; i < 3; i++)
                 getNormalizedMetaCluster(i);
+}
+
+void printFileHex(){
+        unsigned char *cluster_ptr = malloc(512);
+        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
+        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *fileData = malloc(32);
+        int ind = 2;
+        for(int ind = 0; ind < 14; ind++){
+                printf("Arquivo %d:\n", ind);
+                fileData = &cluster_ptr[ind*32];
+                if(fileData[ind] == 0x00){
+                        printf("[LIVRE]\n");
+                        continue;
+                }
+                printf("%.36s\n", fileData); 
+                for(int i = 0; i < 32; i++){
+                        printf("%.2x ", fileData[i]);
+                        if(i == 15)
+                                puts("");
+                }
+                puts("");
+                puts("");
+        }
+}
+
+void createFile(char name[8], char extension[3], char attrib, int size){
+        unsigned char *cluster_ptr = malloc(512);
+        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
+        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *fileData = malloc(32);
+        int ind = 0;
+        for(ind = 0; ; ind++){
+                if(ind > 13){
+                        puts(">>ERRO: sem espaco para novos arquivos");
+                        return;
+                }
+                fileData = &cluster_ptr[ind*32];
+                if(fileData[0] == 0x00){
+                        printf("Arquivo %d: [LIVRE]\n", ind);
+                        break;
+                }
+        }
+        printf("%.32s\n", fileData); 
+
+        u16 logicCluster = (u16)allocateFAT();
+        printf("Logic cluster: %.2x\n", logicCluster);
+        strcpy((char*)fileData, name);
+        strcpy((char*)fileData+8, extension);
+        fileData[11] = attrib;
+        fileData[26] = logicCluster;
+        fileData[28] = size;
+        printf("%.32s\n", fileData); 
+        printf("%.3s\n", &fileData[8]);
+        for(int i = 0; i < 32; i++){
+                printf("%.2x ", fileData[i]);
+                if(i == 15)
+                        puts("");
+        }
+        puts("");
+        fseek(DISK, ROOTDIR_ADDR+(32*ind), SEEK_SET);
+        fwrite(fileData, sizeof(char), 32, DISK);
 }
 
 void handleCopyInput(char input[50]){
@@ -389,7 +420,10 @@ int main(){
                 //printf("FAT Address 0x%x\n", 512); 
                 //printf("FAT Address 0x%x\n", 512+(512*9)); 
                 //readFileTable();
-                copyFileToFAT("tofat");
+                //printFileHex();
+                createFile("ARC     ", "C", 12, 100);
+                //printFileHex();
+                //copyFileToFAT("tofat");
                 //printHumanReadableFileTable();
                 //printFile(0x4a00, 0x37);
                 //copyFileToSystem(0x4a00, 0x37);
