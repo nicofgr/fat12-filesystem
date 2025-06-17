@@ -350,6 +350,48 @@ void copyFileToFAT(char fileName[100]){
         fwrite(buffer, sizeof(char), fileSize, DISK);
 }  
 
+void removeFile(int logicBlockIndex){
+        int right = 0;
+        unsigned char byte[3] = {};
+
+        // MODIFYING LAST CLUSTER
+        u32 logicBlock = getNormalizedClusterByIndex(logicBlockIndex);
+        metaCluster metaClus = getNormalizedMetaCluster(logicBlockIndex/2);
+        printf("%.3x\n", logicBlock);
+        printf("%.3x ", metaClus.nextCluster1);
+        printf("%.3x \n", metaClus.nextCluster2);
+        if(logicBlockIndex%2 == 0){
+                metaClus.nextCluster1 = 0x000;
+        }else{
+                metaClus.nextCluster2 = 0x000;
+                right = 1;
+        }
+        printf("%.3x ", metaClus.nextCluster1);
+        printf("%.3x \n", metaClus.nextCluster2);
+
+        byte[0] = (metaClus.nextCluster1 & 0x0FF);
+        byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
+        byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
+        printf("%.2x %.2x %.2x\n", byte[0], byte[1], byte[2]);
+
+        // GETTING LAST CLUSTER ADDRESS
+        int lastEntryAddress     = FT1_START+(logicBlockIndex);
+        int lastEntryAddressCopy = FT2_START+(logicBlockIndex);
+        printf("Addr: 0x%.4x", lastEntryAddress);
+
+        // WRITING IN BOTH FILE TABLES
+        fseek(DISK, lastEntryAddress, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+        fseek(DISK, lastEntryAddressCopy, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+
+        //u32 fileAddress = (33+entryNumber-2)*512;
+        //printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
+        return;
+        //return entryNumber; // Logic block index in file table
+
+}
+
 
 void handleCopyInput(char input[50]){
         if(!strcmp(input, "1")){
@@ -430,14 +472,15 @@ void handleInput(char input[50]){
 
 
 int main(){
-        if(0){
+        if(1){
                 //DISK = fopen("./fat12subdir.img","rb+");
                 DISK = fopen("./fat12.img","rb+");
                 //printf("FAT Address 0x%x\n", 512); 
                 //printf("FAT Address 0x%x\n", 512+(512*9)); 
                 //readFileTable();
                 //printFileHex();
-                createFile("ARC     ", "C", 12, 100);
+                //createFile("ARC     ", "C", 12, 100);
+                removeFile(3);
                 //printFileHex();
                 //copyFileToFAT("tofat");
                 //printHumanReadableFileTable();
