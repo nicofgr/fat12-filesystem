@@ -78,11 +78,12 @@ void printRootFiles(FILE *DISK, int option){
                 if(*fileName == 0x00)
                         continue; 
                 char* fileExt = (char*)&cluster_ptr[0x08+(i*32)];
-                short fileAddress = *(short*)&cluster_ptr[0x1a+(i*32)];
+                u16 fileAddress = *(u16*)&cluster_ptr[0x1a+(i*32)];
                 fileAddress = (fileAddress+31)*512;
                 u32 fileSize = *(u32*)&cluster_ptr[0x1c+(i*32)];
                 //printf("%x\n", *fileName);
-                printf("├─ %.8s.%.3s (Addr: 0x%x) (Size: 0x%.8x / %d bytes)\n", fileName, fileExt, fileAddress, fileSize, fileSize);
+                //printf("├─ %.8s.%.3s (Addr: 0x%x) (Size: 0x%.8x / %d bytes)\n", fileName, fileExt, fileAddress, fileSize, fileSize);
+                printf("├─ %.8s.%.3s (Addr: 0x%x) (Size: %d bytes)\n", fileName, fileExt, fileAddress, fileSize);
                 if((fileName[11] == 0x10) && (option == 1)){
                         printDirectory(DISK, fileAddress);
                 }
@@ -379,6 +380,9 @@ void handleInput(char input[50]){
                 char arguments[100] = {};
                 scanf("%s", arguments);
                 //printf("\n\n%s %s\n", input, arguments);
+                if(DISK != NULL){
+                        fclose(DISK);
+                }
                 DISK = fopen(arguments,"rb+");
                 if(DISK == NULL){
                         puts(">> ERRO: Arquivo nao encontrado");
@@ -391,15 +395,18 @@ void handleInput(char input[50]){
         }
         if(DISK == NULL){
                 puts(">> ERRO: Nenhum sistema de arquivos montado");
+                puts("mount <file> - monta arquivo no programa");
                 return;
         }
 
 
         if(!strcmp(input, "ls-1")){
                 printRootFiles(DISK, 0);
+                return;
         }
         if(!strcmp(input, "ls")){
                 printRootFiles(DISK, 1);
+                return;
         }
         if(!strcmp(input, "cp")){
                 puts("Escolha uma opcao:");
@@ -410,11 +417,17 @@ void handleInput(char input[50]){
                 handleCopyInput(input);
                 return;
         }
+        puts("Comando nao encontrado, tente um dos seguintes:");
+        puts("mount <file> - monta arquivo no programa");
+        puts("ls-1 - mostra apenas diretorios do root");
+        puts("ls   - mostra todos diretorios");
+        puts("cp   - copia arquivos");
+        puts("exit - sai do programa");
 }
 
 
 int main(){
-        if(1){
+        if(0){
                 //DISK = fopen("./fat12subdir.img","rb+");
                 DISK = fopen("./fat12.img","rb+");
                 //printf("FAT Address 0x%x\n", 512); 
