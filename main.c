@@ -177,7 +177,7 @@ metaCluster getLastMegaCluster(){
         return lastMeta;
 }
 
-void allocateCluster(){ // Um cluster será escrito em um metacluster
+u32 allocateFAT(){ // Um cluster será escrito em um metacluster
         unsigned char byte[3] = {};
         metaCluster metaClus = getLastMegaCluster();
         if(metaClus.nextCluster1 == 0x000){
@@ -222,23 +222,31 @@ void allocateCluster(){ // Um cluster será escrito em um metacluster
         for(int i = 0; i < 3; i++){
                 printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
         }
+        u32 fileAddress = (33+lastIndex-2)*512;
+        printf("Endereço alocado: 0x%x", fileAddress);
+        return fileAddress;
 }
 
-void allocateFAT(int size){
-        if(size > 512)
-                return;
-        
-        
-}
-
-void copyFileToFAT(){
+void copyFileToFAT(char fileName[100]){
         FILE* SYSFILE;
-        char* filename = "tofat";
-        SYSFILE = fopen(filename, "r");
+        //char* filename = "tofat";
+        SYSFILE = fopen(fileName, "r");
+        if(SYSFILE == NULL){
+                puts("ERRO: Arquivo nao encontrado");
+                return;
+        }
         fseek(SYSFILE, 0, SEEK_END);
         int fileSize = ftell(SYSFILE);
         printf("Filesize: %d bytes\n", fileSize);
-        allocateFAT(512);
+        fseek(SYSFILE, 0, SEEK_SET);
+        char* buffer = malloc(512);
+        fgets(buffer, 511, SYSFILE);
+        printf("%s", buffer);
+
+
+        u32 newFileAddress = allocateFAT();
+        fseek(DISK, newFileAddress, SEEK_SET);
+        fwrite(buffer, sizeof(char), fileSize, DISK);
 }  
 
 int getFileNumInFileTable(){
@@ -337,9 +345,9 @@ int main(){
                 //printf("FAT Address 0x%x\n", 512); 
                 //printf("FAT Address 0x%x\n", 512+(512*9)); 
                 //readFileTable();
-                //copyFileToFAT();
-                printHumanReadableFileTable();
-                allocateCluster();
+                copyFileToFAT("tofat");
+                //printHumanReadableFileTable();
+                //allocateFAT();
                 //printFile(0x4a00, 0x37);
                 //copyFileToSystem(0x4a00, 0x37);
 
