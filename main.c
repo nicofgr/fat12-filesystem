@@ -178,52 +178,62 @@ metaCluster getLastMegaCluster(){
 }
 
 u32 allocateFAT(){ // Um cluster será escrito em um metacluster
+        puts("Allocating space in the file table");
+        int right = 0;
         unsigned char byte[3] = {};
         metaCluster metaClus = getLastMegaCluster();
+        printf("Last megacluster: %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
         if(metaClus.nextCluster1 == 0x000){
                 metaClus.nextCluster1 = 0xfff;
         }else{
                 metaClus.nextCluster2 = 0xfff;
+                right = 1;
         }
+        printf("Replace by:       %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
 
         byte[0] = (metaClus.nextCluster1 & 0x0FF);
         byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
         byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
 
-        printf("%.3x ", metaClus.nextCluster1);
-        printf("%.3x\n", metaClus.nextCluster2);
+        printf("Represented by:  ");
         for(int i = 0; i < 3; i++){
                 printf("%02x ", byte[i]);
         }
         puts("");
 
         int lastIndex = getFirstEmptyClusterIndex()/2;
-        printf("Last Index: %d Mega Cluster\n", lastIndex);
+        int entryNumber = right+lastIndex*2;
+        printf("Cluster index: %d\n", entryNumber);
+        //printf("Last Index: %d Mega Cluster\n", lastIndex);
         metaClus = getNormalizedMetaCluster(lastIndex);
-        printf("%.3x ", metaClus.nextCluster1);
-        printf("%.3x\n", metaClus.nextCluster2);
+        //printf("%.3x ", metaClus.nextCluster1);
+        //printf("%.3x\n", metaClus.nextCluster2);
         int lastEntryAddress = FT1_START+(lastIndex*3);
+        printf("Value at last:   ");
         for(int i = 0; i < 3; i++)
                 printf("%02x ", getByteFromAddress(DISK, lastEntryAddress+i));
         puts(""); 
+        printf("From address:    (0x%x)\n", lastEntryAddress);
 
         unsigned char *cluster_ptr = malloc(512);
         fseek(DISK, lastEntryAddress, SEEK_SET);
         //fseek(DISK, FT1_START, SEEK_SET);
         fread(cluster_ptr, sizeof(char), 512, DISK);
         u8 info = *(u8*)&cluster_ptr[0x00];
-        printf("Here: (0x%x)\n", lastEntryAddress);
+
+        // WRITING IN THE FILE TABLE
+        fseek(DISK, lastEntryAddress, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+        fseek(DISK, lastEntryAddress, SEEK_SET);
+        fread(cluster_ptr, sizeof(char), 512, DISK);
+        printf("New value:       ");
         for(int i = 0; i < 3; i++){
                 printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
         }
         puts("");
-        fseek(DISK, lastEntryAddress, SEEK_SET);
-        fwrite(byte, sizeof(char), 3, DISK);
-        for(int i = 0; i < 3; i++){
-                printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
-        }
-        u32 fileAddress = (33+lastIndex-2)*512;
+        u32 fileAddress = (33+entryNumber-2)*512;
         printf("Endereço alocado: 0x%x", fileAddress);
+        //return 0x7000;
         return fileAddress;
 }
 
@@ -241,7 +251,7 @@ void copyFileToFAT(char fileName[100]){
         fseek(SYSFILE, 0, SEEK_SET);
         char* buffer = malloc(512);
         fgets(buffer, 511, SYSFILE);
-        printf("%s", buffer);
+        //printf("%s", buffer);
 
 
         u32 newFileAddress = allocateFAT();
@@ -336,13 +346,13 @@ void handleInput(char input[50]){
                 char arguments[100] = {};
                 scanf("%s", arguments);
                 //printf("\n\n%s %s\n", input, arguments);
-                DISK = fopen(arguments,"rb");
+                DISK = fopen(arguments,"rb+");
                 if(DISK == NULL){
                         puts(">> ERRO: Arquivo nao encontrado");
                         return;
                 }
-                //DISK = fopen("./fat12subdir.img","rb");
-                //DISK = fopen("./fat12.img","rb");
+                //DISK = fopen("./fat12subdir.img","rb+");
+                //DISK = fopen("./fat12.img","rb+");
                 printf(">> Arquivo %s montado com sucesso\n", arguments);
                 return;
         }
@@ -371,15 +381,14 @@ void handleInput(char input[50]){
 
 
 int main(){
-        if(0){
-                DISK = fopen("./fat12subdir.img","rb+");
-                //DISK = fopen("./fat12.img","rb");
+        if(1){
+                //DISK = fopen("./fat12subdir.img","rb+");
+                DISK = fopen("./fat12.img","rb+");
                 //printf("FAT Address 0x%x\n", 512); 
                 //printf("FAT Address 0x%x\n", 512+(512*9)); 
                 //readFileTable();
                 copyFileToFAT("tofat");
                 //printHumanReadableFileTable();
-                //allocateFAT();
                 //printFile(0x4a00, 0x37);
                 //copyFileToSystem(0x4a00, 0x37);
 
