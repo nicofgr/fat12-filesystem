@@ -7,6 +7,7 @@
 #define FT1_START    0x0200
 #define FT2_START    0x1400
 #define ROOTDIR_ADDR 0x2600
+#define BLOCK_SIZE   512
 typedef uint8_t   u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -350,7 +351,17 @@ void copyFileToFAT(char fileName[100]){
         fwrite(buffer, sizeof(char), fileSize, DISK);
 }  
 
-void removeFile(int logicBlockIndex){
+void removePhysicalBlock(int address){
+        char empty[BLOCK_SIZE] = {};
+        fseek(DISK, address, SEEK_SET);
+        fwrite(empty, sizeof(char), BLOCK_SIZE, DISK);
+}
+
+void removeFileFromFAT(int logicBlockIndex){
+        if(logicBlockIndex < 2){
+                puts(">>ERRO: Impossivel remover blocos 0 e 1");
+                return;
+        }
         int right = 0;
         unsigned char byte[3] = {};
 
@@ -377,7 +388,7 @@ void removeFile(int logicBlockIndex){
         // GETTING LAST CLUSTER ADDRESS
         int lastEntryAddress     = FT1_START+(logicBlockIndex);
         int lastEntryAddressCopy = FT2_START+(logicBlockIndex);
-        printf("Addr: 0x%.4x", lastEntryAddress);
+        printf("Addr: 0x%.4x\n", lastEntryAddress);
 
         // WRITING IN BOTH FILE TABLES
         fseek(DISK, lastEntryAddress, SEEK_SET);
@@ -385,8 +396,10 @@ void removeFile(int logicBlockIndex){
         fseek(DISK, lastEntryAddressCopy, SEEK_SET);
         fwrite(byte, sizeof(char), 3, DISK);
 
-        //u32 fileAddress = (33+entryNumber-2)*512;
+        u32 fileAddress = (33+logicBlockIndex-2)*512;
+        printf("PAddr: 0x%.4x\n", fileAddress);
         //printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
+        removePhysicalBlock(fileAddress);
         return;
         //return entryNumber; // Logic block index in file table
 
@@ -480,7 +493,8 @@ int main(){
                 //readFileTable();
                 //printFileHex();
                 //createFile("ARC     ", "C", 12, 100);
-                removeFile(3);
+                for(int i = 2; i < 10; i++)
+                        removeFileFromFAT(i);
                 //printFileHex();
                 //copyFileToFAT("tofat");
                 //printHumanReadableFileTable();
