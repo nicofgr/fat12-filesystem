@@ -304,6 +304,27 @@ void readFileTable(){
                 getNormalizedMetaCluster(i);
 }
 
+void handleCopyInput(char input[50]){
+        if(!strcmp(input, "1")){
+                int fileAddress;
+                int fileSize;
+                printf("Endereço do arquivo: ");
+                scanf("%x", &fileAddress);
+                printf("Tamanho do arquivo: ");
+                scanf("%x", &fileSize);
+                copyFileToSystem(fileAddress, fileSize);
+                return;
+        }
+        if(!strcmp(input, "2")){
+                char fileName[100];
+                printf("Nome do arquivo: ");
+                scanf("%s", fileName);
+                copyFileToFAT(fileName);
+                return;
+        }
+        puts("Opção inválida");
+        return;
+}
 
 void handleInput(char input[50]){
         if(!strcmp(input, "exit")){
@@ -312,8 +333,18 @@ void handleInput(char input[50]){
                 exit(0);
         }
         if(!strcmp(input, "mount")){
+                char arguments[100] = {};
+                scanf("%s", arguments);
+                //printf("\n\n%s %s\n", input, arguments);
+                DISK = fopen(arguments,"rb");
+                if(DISK == NULL){
+                        puts(">> ERRO: Arquivo nao encontrado");
+                        return;
+                }
                 //DISK = fopen("./fat12subdir.img","rb");
-                DISK = fopen("./fat12.img","rb");
+                //DISK = fopen("./fat12.img","rb");
+                printf(">> Arquivo %s montado com sucesso\n", arguments);
+                return;
         }
         if(DISK == NULL){
                 puts(">> ERRO: Nenhum sistema de arquivos montado");
@@ -328,18 +359,19 @@ void handleInput(char input[50]){
                 printRootFiles(DISK, 1);
         }
         if(!strcmp(input, "cp")){
-                int fileAddress;
-                int fileSize;
-                printf("Endereço do arquivo: ");
-                scanf("%x", &fileAddress);
-                printf("Tamanho do arquivo: ");
-                scanf("%x", &fileSize);
-                copyFileToSystem(fileAddress, fileSize);
+                puts("Escolha uma opcao:");
+                puts("1 - Mover do FAT para o sistema:");
+                puts("2 - Mover do sistema para o FAT:");
+                puts("Escolha uma opcao:");
+                scanf("%s", input);
+                handleCopyInput(input);
+                return;
         }
 }
 
+
 int main(){
-        if(1){
+        if(0){
                 DISK = fopen("./fat12subdir.img","rb+");
                 //DISK = fopen("./fat12.img","rb");
                 //printf("FAT Address 0x%x\n", 512); 
