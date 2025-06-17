@@ -170,70 +170,72 @@ int getFirstEmptyClusterIndex(){
 
 metaCluster getLastMegaCluster(){
         int emptyClusterIndex = getFirstEmptyClusterIndex(); 
-        printf("%d\n", emptyClusterIndex);
+        //printf("%d\n", emptyClusterIndex);
         metaCluster lastMeta = getNormalizedMetaCluster(emptyClusterIndex/2);
-        printf("%.3x ", lastMeta.nextCluster1);
-        printf("%.3x\n", lastMeta.nextCluster2);
+        //printf("%.3x ", lastMeta.nextCluster1);
+        //printf("%.3x\n", lastMeta.nextCluster2);
         return lastMeta;
 }
 
 u32 allocateFAT(){ // Um cluster será escrito em um metacluster
-        puts("Allocating space in the file table");
+        //puts("Allocating space in the file table");
         int right = 0;
         unsigned char byte[3] = {};
         metaCluster metaClus = getLastMegaCluster();
-        printf("Last megacluster: %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
+        //printf("Last megacluster: %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
         if(metaClus.nextCluster1 == 0x000){
                 metaClus.nextCluster1 = 0xfff;
         }else{
                 metaClus.nextCluster2 = 0xfff;
                 right = 1;
         }
-        printf("Replace by:       %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
+        //printf("Replace by:       %.3x %.3x\n", metaClus.nextCluster1, metaClus.nextCluster2);
 
         byte[0] = (metaClus.nextCluster1 & 0x0FF);
         byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
         byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
 
-        printf("Represented by:  ");
-        for(int i = 0; i < 3; i++){
-                printf("%02x ", byte[i]);
-        }
-        puts("");
+        //printf("Represented by:  ");
+        //for(int i = 0; i < 3; i++){
+        //        printf("%02x ", byte[i]);
+        //}
+        //puts("");
 
         int lastIndex = getFirstEmptyClusterIndex()/2;
         int entryNumber = right+lastIndex*2;
-        printf("Cluster index: %d\n", entryNumber);
+        //printf("Cluster index: %d\n", entryNumber);
         //printf("Last Index: %d Mega Cluster\n", lastIndex);
         metaClus = getNormalizedMetaCluster(lastIndex);
         //printf("%.3x ", metaClus.nextCluster1);
         //printf("%.3x\n", metaClus.nextCluster2);
         int lastEntryAddress = FT1_START+(lastIndex*3);
-        printf("Value at last:   ");
-        for(int i = 0; i < 3; i++)
-                printf("%02x ", getByteFromAddress(DISK, lastEntryAddress+i));
-        puts(""); 
-        printf("From address:    (0x%x)\n", lastEntryAddress);
+        int lastEntryAddressCopy = FT2_START+(lastIndex*3);
+        //printf("Value at last:   ");
+        //for(int i = 0; i < 3; i++)
+        //        printf("%02x ", getByteFromAddress(DISK, lastEntryAddress+i));
+        //puts(""); 
+        //printf("From address:    (0x%x)\n", lastEntryAddress);
 
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, lastEntryAddress, SEEK_SET);
+        //unsigned char *cluster_ptr = malloc(512);
+        //fseek(DISK, lastEntryAddress, SEEK_SET);
         //fseek(DISK, FT1_START, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
-        u8 info = *(u8*)&cluster_ptr[0x00];
+        //fread(cluster_ptr, sizeof(char), 512, DISK);
+        //u8 info = *(u8*)&cluster_ptr[0x00];
 
-        // WRITING IN THE FILE TABLE
+        // WRITING IN BOTH FILE TABLES
         fseek(DISK, lastEntryAddress, SEEK_SET);
         fwrite(byte, sizeof(char), 3, DISK);
-        fseek(DISK, lastEntryAddress, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
-        printf("New value:       ");
-        for(int i = 0; i < 3; i++){
-                printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
-        }
-        puts("");
+        fseek(DISK, lastEntryAddressCopy, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+        //fseek(DISK, lastEntryAddress, SEEK_SET);
+        //fread(cluster_ptr, sizeof(char), 512, DISK);
+        //printf("New value:       ");
+        //for(int i = 0; i < 3; i++){
+        //        printf("%02x ", *(u8*)&cluster_ptr[0x00+i]);
+        //}
+        //puts("");
         u32 fileAddress = (33+entryNumber-2)*512;
-        printf("Endereço alocado: 0x%x", fileAddress);
-        //return 0x7000;
+        //printf("Endereço alocado: 0x%x", fileAddress);
         return fileAddress;
 }
 
