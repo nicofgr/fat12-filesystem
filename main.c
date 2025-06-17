@@ -368,27 +368,27 @@ void removeFileFromFAT(int logicBlockIndex){
         // MODIFYING LAST CLUSTER
         u32 logicBlock = getNormalizedClusterByIndex(logicBlockIndex);
         metaCluster metaClus = getNormalizedMetaCluster(logicBlockIndex/2);
-        printf("%.3x\n", logicBlock);
-        printf("%.3x ", metaClus.nextCluster1);
-        printf("%.3x \n", metaClus.nextCluster2);
+        //printf("%.3x\n", logicBlock);
+        //printf("%.3x ", metaClus.nextCluster1);
+        //printf("%.3x \n", metaClus.nextCluster2);
         if(logicBlockIndex%2 == 0){
                 metaClus.nextCluster1 = 0x000;
         }else{
                 metaClus.nextCluster2 = 0x000;
                 right = 1;
         }
-        printf("%.3x ", metaClus.nextCluster1);
-        printf("%.3x \n", metaClus.nextCluster2);
+        //printf("%.3x ", metaClus.nextCluster1);
+        //printf("%.3x \n", metaClus.nextCluster2);
 
         byte[0] = (metaClus.nextCluster1 & 0x0FF);
         byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
         byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
-        printf("%.2x %.2x %.2x\n", byte[0], byte[1], byte[2]);
+        //printf("%.2x %.2x %.2x\n", byte[0], byte[1], byte[2]);
 
         // GETTING LAST CLUSTER ADDRESS
         int lastEntryAddress     = FT1_START+(logicBlockIndex);
         int lastEntryAddressCopy = FT2_START+(logicBlockIndex);
-        printf("Addr: 0x%.4x\n", lastEntryAddress);
+        //printf("Addr: 0x%.4x\n", lastEntryAddress);
 
         // WRITING IN BOTH FILE TABLES
         fseek(DISK, lastEntryAddress, SEEK_SET);
@@ -397,12 +397,60 @@ void removeFileFromFAT(int logicBlockIndex){
         fwrite(byte, sizeof(char), 3, DISK);
 
         u32 fileAddress = (33+logicBlockIndex-2)*512;
-        printf("PAddr: 0x%.4x\n", fileAddress);
+        //printf("PAddr: 0x%.4x\n", fileAddress);
         //printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
         removePhysicalBlock(fileAddress);
         return;
         //return entryNumber; // Logic block index in file table
 
+}
+
+void removeFileByIndex(int index){
+        unsigned char *cluster_ptr = malloc(512);
+        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
+        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *fileData = malloc(32);
+        
+        int subDirIndex=0;
+        int counter = 0;
+        while(1){
+                fileData = &cluster_ptr[subDirIndex*32];
+                //printf("%.2x  ", fileData[0]);
+                if(fileData[0] != 0x00)
+                        counter++;  
+                //printf("%d\n", counter);
+                if(counter-1 == index)
+                        break;
+                subDirIndex++;
+        }
+
+        //printf("%.2x  ", fileData[0]);
+        //printf("%.32s\n", fileData); 
+        //for(int i = 0; i < 32; i++){
+        //        printf("%.2x ", fileData[i]);
+        //        if(i == 15)
+        //                puts("");
+        //}
+        //puts("");
+
+        int logicBlockIndex = fileData[26];
+        //printf("Logic Block Index: %d", logicBlockIndex);
+        removeFileFromFAT(logicBlockIndex);
+
+        char empty[32] = {};
+        fseek(DISK, ROOTDIR_ADDR+(32*subDirIndex), SEEK_SET);
+        fwrite(empty, sizeof(char), 32, DISK);
+
+        //fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
+        //fread(cluster_ptr, sizeof(char), 512, DISK);
+        //printf("Logic cluster: %.2x\n", logicBlockIndex);
+        //fileData = &cluster_ptr[index*32];
+        //for(int i = 0; i < 32; i++){
+        //        printf("%.2x ", fileData[i]);
+        //        if(i == 15)
+        //                puts("");
+        //}
+        return;  // Address to the file contents
 }
 
 
@@ -475,6 +523,12 @@ void handleInput(char input[50]){
                 handleCopyInput(input);
                 return;
         }
+        if(!strcmp(input, "rm")){
+                int index;
+                scanf("%d", &index);
+                removeFileByIndex(index);
+                return;
+        }
         puts("Comando nao encontrado, tente um dos seguintes:");
         puts("mount <file> - monta arquivo no programa");
         puts("ls-1 - mostra apenas diretorios do root");
@@ -485,7 +539,7 @@ void handleInput(char input[50]){
 
 
 int main(){
-        if(1){
+        if(0){
                 //DISK = fopen("./fat12subdir.img","rb+");
                 DISK = fopen("./fat12.img","rb+");
                 //printf("FAT Address 0x%x\n", 512); 
@@ -493,8 +547,7 @@ int main(){
                 //readFileTable();
                 //printFileHex();
                 //createFile("ARC     ", "C", 12, 100);
-                for(int i = 2; i < 10; i++)
-                        removeFileFromFAT(i);
+                removeFileByIndex(1);
                 //printFileHex();
                 //copyFileToFAT("tofat");
                 //printHumanReadableFileTable();
