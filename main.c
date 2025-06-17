@@ -177,59 +177,6 @@ metaCluster getLastMegaCluster(){
         return lastMeta;
 }
 
-u16 allocateFAT(){
-        int right = 0;
-        unsigned char byte[3] = {};
-
-        // MODIFYING LAST CLUSTER
-        metaCluster metaClus = getLastMegaCluster();
-        if(metaClus.nextCluster1 == 0x000){
-                metaClus.nextCluster1 = 0xfff;
-        }else{
-                metaClus.nextCluster2 = 0xfff;
-                right = 1;
-        }
-
-        byte[0] = (metaClus.nextCluster1 & 0x0FF);
-        byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
-        byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
-
-        // GETTING LAST CLUSTER ADDRESS
-        int lastIndex = getFirstEmptyClusterIndex()/2;
-        u16 entryNumber = right+lastIndex*2;
-        metaClus = getNormalizedMetaCluster(lastIndex);
-        int lastEntryAddress = FT1_START+(lastIndex*3);
-        int lastEntryAddressCopy = FT2_START+(lastIndex*3);
-
-        // WRITING IN BOTH FILE TABLES
-        fseek(DISK, lastEntryAddress, SEEK_SET);
-        fwrite(byte, sizeof(char), 3, DISK);
-        fseek(DISK, lastEntryAddressCopy, SEEK_SET);
-        fwrite(byte, sizeof(char), 3, DISK);
-
-        u32 fileAddress = (33+entryNumber-2)*512;
-        printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
-        return entryNumber;
-}
-
-void copyFileToFAT(char fileName[100]){
-        FILE* SYSFILE;
-        SYSFILE = fopen(fileName, "r");
-        if(SYSFILE == NULL){
-                puts("ERRO: Arquivo nao encontrado");
-                return;
-        }
-        fseek(SYSFILE, 0, SEEK_END);
-        int fileSize = ftell(SYSFILE);
-        printf("Filesize: %d bytes\n", fileSize);
-        fseek(SYSFILE, 0, SEEK_SET);
-        char* buffer = malloc(512);
-        fgets(buffer, 511, SYSFILE);
-
-        u32 newFileAddress = allocateFAT();
-        fseek(DISK, newFileAddress, SEEK_SET);
-        fwrite(buffer, sizeof(char), fileSize, DISK);
-}  
 
 int getFileNumInFileTable(){
         int nFiles = 0;
@@ -310,7 +257,42 @@ void printFileHex(){
         }
 }
 
-void createFile(char name[8], char extension[3], char attrib, int size){
+u16 allocateFAT(){
+        int right = 0;
+        unsigned char byte[3] = {};
+
+        // MODIFYING LAST CLUSTER
+        metaCluster metaClus = getLastMegaCluster();
+        if(metaClus.nextCluster1 == 0x000){
+                metaClus.nextCluster1 = 0xfff;
+        }else{
+                metaClus.nextCluster2 = 0xfff;
+                right = 1;
+        }
+
+        byte[0] = (metaClus.nextCluster1 & 0x0FF);
+        byte[1] = ((metaClus.nextCluster1 >> 8) & 0x00F) + ((metaClus.nextCluster2 << 4) & 0x0F0) & 0xFF;
+        byte[2] = (metaClus.nextCluster2>>4) & 0x0FF;
+
+        // GETTING LAST CLUSTER ADDRESS
+        int lastIndex = getFirstEmptyClusterIndex()/2;
+        u16 entryNumber = right+lastIndex*2;
+        metaClus = getNormalizedMetaCluster(lastIndex);
+        int lastEntryAddress = FT1_START+(lastIndex*3);
+        int lastEntryAddressCopy = FT2_START+(lastIndex*3);
+
+        // WRITING IN BOTH FILE TABLES
+        fseek(DISK, lastEntryAddress, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+        fseek(DISK, lastEntryAddressCopy, SEEK_SET);
+        fwrite(byte, sizeof(char), 3, DISK);
+
+        u32 fileAddress = (33+entryNumber-2)*512;
+        printf("Logic cluster %d\nAddress: %x\n", entryNumber, fileAddress);
+        return entryNumber; // Logic block index in file table
+}
+
+u32 createFile(char name[8], char extension[3], char attrib, int size){
         unsigned char *cluster_ptr = malloc(512);
         fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
         fread(cluster_ptr, sizeof(char), 512, DISK);
@@ -319,7 +301,7 @@ void createFile(char name[8], char extension[3], char attrib, int size){
         for(ind = 0; ; ind++){
                 if(ind > 13){
                         puts(">>ERRO: sem espaco para novos arquivos");
-                        return;
+                        return 0;
                 }
                 fileData = &cluster_ptr[ind*32];
                 if(fileData[0] == 0x00){
@@ -346,7 +328,28 @@ void createFile(char name[8], char extension[3], char attrib, int size){
         puts("");
         fseek(DISK, ROOTDIR_ADDR+(32*ind), SEEK_SET);
         fwrite(fileData, sizeof(char), 32, DISK);
+        return (33+logicCluster-2)*512;  // Address to the file contents
 }
+
+void copyFileToFAT(char fileName[100]){
+        FILE* SYSFILE;
+        SYSFILE = fopen(fileName, "r");
+        if(SYSFILE == NULL){
+                puts("ERRO: Arquivo nao encontrado");
+                return;
+        }
+        fseek(SYSFILE, 0, SEEK_END);
+        int fileSize = ftell(SYSFILE);
+        printf("Filesize: %d bytes\n", fileSize);
+        fseek(SYSFILE, 0, SEEK_SET);
+        char* buffer = malloc(512);
+        fgets(buffer, 511, SYSFILE);
+
+        u32 newFileAddress = createFile(fileName,"", 12, fileSize);
+        fseek(DISK, newFileAddress, SEEK_SET);
+        fwrite(buffer, sizeof(char), fileSize, DISK);
+}  
+
 
 void handleCopyInput(char input[50]){
         if(!strcmp(input, "1")){
