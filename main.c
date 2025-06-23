@@ -4,18 +4,20 @@
 #include <string.h>
 #include <stdint.h>
 
-#define FT1_START    0x0200
-#define FT2_START    0x1400
-#define ROOTDIR_ADDR 0x2600
-#define BLOCK_SIZE   512
+#define FT1_START    0x0200 // Inicio da copia 1 da FAT
+#define FT2_START    0x1400 // Inicio da copia 2 da FAT
+#define ROOTDIR_ADDR 0x2600 // Inicio do root
+#define BLOCK_SIZE   512    // Tamanho dos setores
 typedef uint8_t   u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 FILE *DISK;
 
-void getClusterFromAdrress(FILE *DISK, int address, unsigned char *ponteiro_cluster){
+unsigned char *getSectorFromAddress(int address){
+        unsigned char *cluster_ptr = malloc(BLOCK_SIZE);
         fseek(DISK, address, SEEK_SET);
-        fread(ponteiro_cluster, sizeof(char), 512, DISK);
+        fread(cluster_ptr, sizeof(char), BLOCK_SIZE, DISK);
+        return cluster_ptr;
 }
 
 unsigned char getByteFromAddress(FILE *DISK, int address){
@@ -27,22 +29,17 @@ unsigned char getByteFromAddress(FILE *DISK, int address){
         return byteLido;
 }
 
-
 unsigned int getRootAddress(FILE *DISK){
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, 0, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *cluster_ptr = getSectorFromAddress(0);
         char numFATs = *(char*)&cluster_ptr[0x10];
         char sizeFAT = *(short*)&cluster_ptr[0x16];
-        int rootAddress = ((numFATs*sizeFAT)+1)*512;
+        int rootAddress = ((numFATs*sizeFAT)+1)*BLOCK_SIZE;
         free(cluster_ptr);
         return rootAddress;
 }
 
 void printDirectory(FILE *DISK, int address){
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, address, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *cluster_ptr = getSectorFromAddress(address);
         for(int i = 0; i < 3; i++){
                 char* fileName = (char*)&cluster_ptr[0x00+(i*32)];
                 if(*fileName == 0x00)
@@ -56,14 +53,12 @@ void printDirectory(FILE *DISK, int address){
                 printf("   (0x%x)", fileAddress);
                 printf("\n");
         }
+        free(cluster_ptr);
 }
 
 void printRootFiles(FILE *DISK, int option){
         unsigned int rootAddress = getRootAddress(DISK);
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, rootAddress, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
-
+        unsigned char *cluster_ptr = getSectorFromAddress(rootAddress);
 
         for(int i = 0; i < 16; i++){
                 char* fileName = (char*)&cluster_ptr[0x00+(i*32)];
@@ -103,9 +98,6 @@ void copyFileToSystem(int fileAddress, int fileSize){
         fclose(newFile);
         free(cluster_ptr);
 }
-
-
-
 
 typedef struct{
         u32 nextCluster1;
@@ -218,10 +210,9 @@ void readFileTable(){
 }
 
 void printFileHex(){
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *cluster_ptr = getSectorFromAddress(ROOTDIR_ADDR);
         unsigned char *fileData = malloc(32);
+
         for(int ind = 0; ind < 14; ind++){
                 printf("Arquivo %d:\n", ind);
                 fileData = &cluster_ptr[ind*32];
@@ -238,6 +229,7 @@ void printFileHex(){
                 puts("");
                 puts("");
         }
+        free(cluster_ptr);
 }
 
 u16 allocateFAT(){
@@ -276,11 +268,10 @@ u16 allocateFAT(){
 }
 
 u32 createFile(char name[8], char extension[3], char attrib, int size){
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *cluster_ptr = getSectorFromAddress(ROOTDIR_ADDR);
         unsigned char *fileData = malloc(32);
 
+        // Procura espaço vazio no diretório root
         int ind = 0;
         for(ind = 0; ; ind++){
                 if(ind > 13){
@@ -295,8 +286,11 @@ u32 createFile(char name[8], char extension[3], char attrib, int size){
         }
         printf("%.32s\n", fileData); 
 
+        // Aloca espaço na FAT
         u16 logicCluster = (u16)allocateFAT();
         printf("Logic cluster: %.2x\n", logicCluster);
+
+        // Copia info para o bloco físico
         strcpy((char*)fileData, name);
         strcpy((char*)fileData+8, extension);
         fileData[11] = attrib;
@@ -375,9 +369,7 @@ void removeFileFromFAT(int logicBlockIndex){
 }
 
 void removeFileByIndex(int index){
-        unsigned char *cluster_ptr = malloc(512);
-        fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
-        fread(cluster_ptr, sizeof(char), 512, DISK);
+        unsigned char *cluster_ptr = getSectorFromAddress(ROOTDIR_ADDR);
         unsigned char *fileData = malloc(32);
         
         int subDirIndex=0;
