@@ -53,7 +53,7 @@ void printDirectory(FILE *DISK, int address){
                 char* fileExt = (char*)&cluster_ptr[0x08+(i*32)];
                 short fileAddress = *(short*)&cluster_ptr[0x1a+(i*32)];
                 fileAddress = (fileAddress+31)*512;
-                short fileSize = *(short*)&cluster_ptr[0x1a+(i*32)];
+                //short fileSize = *(short*)&cluster_ptr[0x1a+(i*32)];
                 //printf("%x\n", *fileName);
                 printf("  ├─ %.8s.%.3s", fileName, fileExt);
                 if(fileName[11] == 0x10)
@@ -89,6 +89,7 @@ void printRootFiles(FILE *DISK, int option){
                         printDirectory(DISK, fileAddress);
                 }
         }
+        free(cluster_ptr);
 }
 
 void printFile(int fileAddress, int fileSize){
@@ -111,6 +112,7 @@ void copyFileToSystem(int fileAddress, int fileSize){
                 fprintf(newFile, "%c", cluster_ptr[i]);
         }
         fclose(newFile);
+        free(cluster_ptr);
 }
 
 
@@ -239,7 +241,7 @@ void printFileHex(){
         fseek(DISK, ROOTDIR_ADDR, SEEK_SET);
         fread(cluster_ptr, sizeof(char), 512, DISK);
         unsigned char *fileData = malloc(32);
-        int ind = 2;
+        //int ind = 2;
         for(int ind = 0; ind < 14; ind++){
                 printf("Arquivo %d:\n", ind);
                 fileData = &cluster_ptr[ind*32];
@@ -362,11 +364,11 @@ void removeFileFromFAT(int logicBlockIndex){
                 puts(">>ERRO: Impossivel remover blocos 0 e 1");
                 return;
         }
-        int right = 0;
+        //int right = 0;
         unsigned char byte[3] = {};
 
         // MODIFYING LAST CLUSTER
-        u32 logicBlock = getNormalizedClusterByIndex(logicBlockIndex);
+        //u32 logicBlock = getNormalizedClusterByIndex(logicBlockIndex);
         metaCluster metaClus = getNormalizedMetaCluster(logicBlockIndex/2);
         //printf("%.3x\n", logicBlock);
         //printf("%.3x ", metaClus.nextCluster1);
@@ -375,7 +377,7 @@ void removeFileFromFAT(int logicBlockIndex){
                 metaClus.nextCluster1 = 0x000;
         }else{
                 metaClus.nextCluster2 = 0x000;
-                right = 1;
+                //right = 1;
         }
         //printf("%.3x ", metaClus.nextCluster1);
         //printf("%.3x \n", metaClus.nextCluster2);
